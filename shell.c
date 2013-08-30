@@ -1,3 +1,4 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,16 +11,15 @@
 #define MAX_INPUT_SIZE 100
 #define MAX_DIRECTORY_SIZE 100
 #define MAX_NUM_ARGS 30
+#define MAX_NUM_COMMANDS 10
 
 
 int internal_wait()
 {
     int pid = 0;
     
-    while(pid != -1)
+    while((pid = wait())!= -1)
     {
-        pid = wait();
-        if (pid == -1) break;
         printf("Process %d finished\n", pid);
         continue;
     }
@@ -38,56 +38,102 @@ int num_args(char** args, unsigned int num)
 }
 
 
-void execute(char** args, int background)
+void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
+             int numCommands,
+             int background)
 {    
     //Handle built-in commands (i.e. cd)
-    if (strcmp(args[0], "exit") == 0)
+    if (strcmp(commands[0][0], "exit") == 0)
     {
-        if (!num_args(args, 0)) //Exit must have no other args
+        if (!num_args(commands[0], 0)) //Exit must have no other args
             return;
         internal_wait();
         exit(0);
     }
-    else if (strcmp(args[0], "wait") == 0)
+    else if (strcmp(commands[0][0], "wait") == 0)
     {
-        if (!num_args(args, 0))
+        if (!num_args(commands[0], 0))
             return;
         internal_wait();
         return;
     }
-    else if (strcmp(args[0], "cd") == 0)
+    else if (strcmp(commands[0][0], "cd") == 0)
     {
-        if (!num_args(args, 1))
+        if (!num_args(commands[0], 1))
             return;
-        chdir(args[1]);
+        chdir(commands[0][1]);
         return;
     }
+
     
-    //Send other commands to the OS
-    pid_t pid = fork();
-    if (pid < 0)
+    int pipes[MAX_NUM_COMMANDS][2];
+    int pipeNum;
+    for(pipeNum=0; pipeNum < 10; ++pipeNum)
     {
-        perror("Error forking process");
-        return;
+        pipe(pipes[pipeNum]);
     }
-    else if (pid == 0)
-    {   
-        if (execvp(*args, args) != -1)
+
+    int savedOUT = dup(STDOUT_FILENO);
+    int savedIN  = dup(STDIN_FILENO);
+
+    pid_t pid_last = 0;
+    pid_t pid = fork();
+    if (pid == 0) // Special case for 1st command
+    {
+        close(pipes[0][0]);
+        if (numCommands > 1)
         {
-            exit(0);
+            dup2(pipes[0][1], 1); //if in a pipe, redirect output
         }
-        else     //An error has occured
+        
+        execvp(commands[0][0], commands[0]);
+        perror(commands[0][0]);
+        exit(-1);
+    }
+
+    
+    if (numCommands > 1) {
+
+        int i=1;
+        for(; i < numCommands-1; ++i)
         {
-            perror(*args);
+            pid_t pid = fork();
+            if (pid == 0) //child
+            {
+                close(pipes[i][0]);   //close read on this pipe
+                close(pipes[i-1][1]); //close write on previous pipe
+                
+                dup2(pipes[i-1][0], 0); //Make previous pipe read into STDIN
+                dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
+
+                execvp(commands[i][0], commands[i]);
+                perror(commands[i][0]);
+                exit(-1); //execvp should not return
+            }
+        }
+
+        pid_last = fork();  //Special case for last command
+        if (pid_last == 0)
+        {
+            close(pipes[i][0]);
+            close(pipes[i-1][1]);
+
+            dup2(pipes[i-1][0], 0);
+            dup2(pipes[i][1], savedOUT); //send output to stdout
+            
+            execvp(commands[i][0], commands[i]);
+            perror(commands[i][0]);
             exit(-1);
         }
     }
-    else 
+
+    if ( (pid > 0 && !background && numCommands == 1))
     {
-        if (!background)
-            while(wait() != pid) return;
-        else
-            printf("Starting new process %lu\n", (unsigned long)pid);
+        waitpid(pid);
+    }
+    else if (numCommands > 1 && pid_last > 0)
+    {
+        waitpid(pid_last);
     }
 }
 
@@ -97,7 +143,6 @@ int main()
     char input[MAX_DIRECTORY_SIZE];
 
     char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS];
-    char* args[MAX_NUM_ARGS];
     char* arg;
     int background = false;
           
@@ -133,22 +178,30 @@ int main()
             background = false;
         }
 
-        args[0] = strtok(input, " "); //Determine the command
+        commands[0][0] = strtok(input, " "); //Determine the command
             
         //Parse arguments
         size_t index = 1;
+        size_t command_num = 0;
         while (input != NULL)
         {
             arg = strtok(NULL, " ");
-            if (arg == NULL)
+            if (arg == NULL) {
                 break;
-        
-            args[index++] = arg;
+            }
+            else if (strcmp(arg, "|") == 0) {
+                commands[command_num][index] = NULL;
+                ++command_num;
+                index=0;
+            }
+            else {
+                commands[command_num][index++] = arg;
+            }
         }
-        args[index] = NULL;
-    
-        execute(args, background);
+        commands[command_num][index] = NULL;
 
+        execute(commands, command_num+1, background);
+        
     }
     return 0;
 }
