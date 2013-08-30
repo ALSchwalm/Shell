@@ -68,7 +68,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     
     int pipes[MAX_NUM_COMMANDS][2];
     int pipeNum;
-    for(pipeNum=0; pipeNum < 10; ++pipeNum)
+    for(pipeNum=0; pipeNum < numCommands; ++pipeNum)
     {
         pipe(pipes[pipeNum]);
     }
@@ -80,12 +80,15 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     pid_t pid = fork();
     if (pid == 0) // Special case for 1st command
     {
-        close(pipes[0][0]);
+        
         if (numCommands > 1)
         {
             dup2(pipes[0][1], 1); //if in a pipe, redirect output
+            
+            close(pipes[0][0]);
+            close(pipes[0][1]);
         }
-        
+
         execvp(commands[0][0], commands[0]);
         perror(commands[0][0]);
         exit(-1);
@@ -100,12 +103,16 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
             pid_t pid = fork();
             if (pid == 0) //child
             {
-                close(pipes[i][0]);   //close read on this pipe
-                close(pipes[i-1][1]); //close write on previous pipe
                 
                 dup2(pipes[i-1][0], 0); //Make previous pipe read into STDIN
                 dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
 
+                close(pipes[i][0]);   //close read on this pipe
+                close(pipes[i][1]);
+                
+                close(pipes[i-1][1]); //close write on previous pipe
+                close(pipes[i-1][0]);
+                
                 execvp(commands[i][0], commands[i]);
                 perror(commands[i][0]);
                 exit(-1); //execvp should not return
@@ -115,16 +122,28 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
         pid_last = fork();  //Special case for last command
         if (pid_last == 0)
         {
-            close(pipes[i][0]);
-            close(pipes[i-1][1]);
 
             dup2(pipes[i-1][0], 0);
             dup2(pipes[i][1], savedOUT); //send output to stdout
+
+            close(pipes[i][0]);
+            close(pipes[i-1][1]);
+	    close(pipes[i-1][0]);
+	    close(pipes[i][1]);
             
             execvp(commands[i][0], commands[i]);
             perror(commands[i][0]);
             exit(-1);
         }
+    }
+
+    pipeNum = 0;
+    for (; pipeNum < numCommands; ++pipeNum)
+    {
+        if (pipes[pipeNum][0] != STDOUT_FILENO)
+            close(pipes[pipeNum][0]);
+        if (pipes[pipeNum][1] != STDIN_FILENO)
+            close(pipes[pipeNum][1]);
     }
 
     if ( (pid > 0 && !background && numCommands == 1))
