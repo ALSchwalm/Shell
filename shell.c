@@ -51,8 +51,7 @@ void nonblocking_wait(void)
 
 void blocking_wait(void)
 {
-    int pid = 0;
-    int status;
+    int pid = 0, status;
     while((pid = wait(&status))!= -1)
     {
         printf("process %d ended\n", pid);
@@ -172,7 +171,7 @@ int main()
     char* arg;
     int background = false;
     
-    char* home = getenv("HOME");
+    home = getenv("HOME");
     char* user = getenv("USER");
     gethostname(host, MAX_HOSTNAME_LEN);
     
@@ -188,7 +187,7 @@ int main()
         }
 
         if (isatty(fileno(stdin)))  //Hide prompt on redirect
-            printf("%s@%s:%s>", user, host, working_dir);
+            printf("%s@%s:[%s]>", user, host, working_dir);
         
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL)
             break;
