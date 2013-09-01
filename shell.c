@@ -13,6 +13,7 @@
 #define MAX_NUM_ARGS 30
 #define MAX_NUM_COMMANDS 10
 
+char working_dir[MAX_INPUT_SIZE];
 
 int internal_wait()
 {
@@ -63,7 +64,14 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
         chdir(commands[0][1]);
         return;
     }
-
+    else if (strcmp(commands[0][0], "pwd") == 0)
+    {
+        if (!num_args(commands[0], 0))
+            return;
+        printf("%s\n", working_dir);
+        return;
+    }
+     
     
     int pipes[MAX_NUM_COMMANDS][2];
     int pids[MAX_NUM_COMMANDS];
@@ -76,59 +84,40 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     int savedOUT = dup(STDOUT_FILENO);
     int savedIN  = dup(STDIN_FILENO);
 
-    pid_t pid = fork();
-    if (pid == 0) // Special case for 1st command
+    pid_t pid;
+    
+    int i=0;
+    for(; i < numCommands; ++i)
     {
-        
-        if (numCommands > 1)
+        pid  = fork();
+        if (pid == 0) //child
         {
-            dup2(pipes[0][1], 1); //if in a pipe, redirect output
-            
-            close(pipes[0][0]);
-            close(pipes[0][1]);
-        }
 
-        execvp(commands[0][0], commands[0]);
-        perror(commands[0][0]);
-        exit(-1);
-    }
-    else
-    {
-        pids[0] = pid;
+            if (i > 0)
+                dup2(pipes[i-1][0], 0); //Make previous pipe read into STDIN
+                
+            if ( i < numCommands-1 )
+                dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
+            else
+                dup2(pipes[i][1], savedOUT);
+
+            int j = 0;
+            for (; j < numCommands; ++j)
+            {
+                close(pipes[j][0]);
+                close(pipes[j][1]);
+            }
+                
+            execvp(commands[i][0], commands[i]);
+            perror(commands[i][0]);
+            exit(-1); //execvp should not return
+        }
+        else if (pid > 0)
+        {
+            pids[i] = pid;
+        }
     }
     
-    if (numCommands > 1) {
-
-        int i=1;
-        for(; i < numCommands; ++i)
-        {
-            pid_t pid_inner = fork();
-            if (pid_inner == 0) //child
-            {
-                
-                dup2(pipes[i-1][0], 0); //Make previous pipe read into STDIN
-                if ( i < numCommands-1 )
-                    dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
-                else
-                    dup2(pipes[i][1], savedOUT);
-
-                int j = 0;
-                for (; j < numCommands; ++j)
-                {
-                    close(pipes[j][0]);
-                    close(pipes[j][1]);
-                }
-                
-                execvp(commands[i][0], commands[i]);
-                perror(commands[i][0]);
-                exit(-1); //execvp should not return
-            }
-            else
-            {
-                pids[i] = pid_inner;
-            }
-        }
-    }
 
     pipeNum = 0;
     for (; pipeNum < numCommands; ++pipeNum)
@@ -143,6 +132,10 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     {
         waitpid(pid);
     }
+    else if (pid > 0 && background)
+    {
+        printf("Spawning process %d\n", pid);
+    }
     else if (numCommands > 1)
     {
         int i = 0;
@@ -153,7 +146,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
 
 int main()
 {
-    char working_dir[MAX_INPUT_SIZE];
     char input[MAX_DIRECTORY_SIZE];
 
     char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS];
@@ -163,10 +155,9 @@ int main()
     while (true)
     {
         getcwd(working_dir, MAX_DIRECTORY_SIZE-1);
-        strcat(working_dir, ">");
 
         if (isatty(fileno(stdin)))  //Hide prompt on redirect
-            printf("%s", working_dir);
+            printf("%s>", working_dir);
         
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL)
             break;
