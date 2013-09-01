@@ -1,4 +1,3 @@
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,16 +11,47 @@
 #define MAX_DIRECTORY_SIZE 100
 #define MAX_NUM_ARGS 30
 #define MAX_NUM_COMMANDS 10
+#define MAX_BACKGROUND_PROCESSES 20
 
 char working_dir[MAX_INPUT_SIZE];
+int background_table[MAX_BACKGROUND_PROCESSES];
 
-int internal_wait()
+int add_background_pid(int pid)
+{
+    printf("process %d started\n", pid);
+    
+    int i = 0;
+    for (; i < MAX_BACKGROUND_PROCESSES; ++i)
+    {
+        if (background_table[i] == 0) {
+            background_table[i] = pid;
+            return true;
+        }
+    }
+    return false;
+}
+
+void nonblock_background_wait(void)
+{
+    int status;
+    int i = 0;
+    for (; i < MAX_BACKGROUND_PROCESSES; ++i)
+    {
+        if (background_table[i] &&
+              waitpid(background_table[i], &status, WNOHANG) > 0) {
+            printf("process %d ended\n", background_table[i]);
+            background_table[i] = 0;
+        }
+    }
+}
+
+int internal_wait(void)
 {
     int pid = 0;
     
     while((pid = wait())!= -1)
     {
-        printf("Process %d finished\n", pid);
+        printf("process %d ended\n", pid);
     }
 
     return (errno == ECHILD) ? 0 : -1;
@@ -31,11 +61,11 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
              int numCommands,
              int background)
 {    
-    //Handle built-in commands (i.e. cd)
+    //Handle built-in commands
     if (strcmp(commands[0][0], "exit") == 0)
     {
         internal_wait();
-        exit(0);
+        exit(EXIT_SUCCESS);
     }
     else if (strcmp(commands[0][0], "wait") == 0)
     {
@@ -79,7 +109,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
                 dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
             else
                 dup2(pipes[i][1], savedOUT);
-
+            
             int j = 0;
             for (; j < numCommands; ++j)
             {
@@ -89,11 +119,16 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
                 
             execvp(commands[i][0], commands[i]);
             perror(commands[i][0]);
-            exit(-1); //execvp should not return
+            exit(EXIT_FAILURE); //execvp should not return
         }
         else if (pid > 0)
         {
-            pids[i] = pid;
+            pids[i] = pid; //store pids for wait
+        }
+        else
+        {
+            perror("Fork");
+            return;
         }
     }
     
@@ -107,15 +142,11 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
             close(pipes[pipeNum][1]);
     }
 
-    if ( (pid > 0 && !background && numCommands == 1))
+    if (pid > 0 && background)
     {
-        waitpid(pid);
+        add_background_pid(pid);
     }
-    else if (pid > 0 && background)
-    {
-        printf("Spawning process %d\n", pid);
-    }
-    else if (numCommands > 1)
+    else if (!background)
     {
         int i = 0;
         for (; i < numCommands; ++i)
@@ -133,6 +164,8 @@ int main()
           
     while (true)
     {
+        nonblock_background_wait();
+        
         getcwd(working_dir, MAX_DIRECTORY_SIZE-1);
 
         if (isatty(fileno(stdin)))  //Hide prompt on redirect
