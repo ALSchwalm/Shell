@@ -21,7 +21,6 @@ int internal_wait()
     while((pid = wait())!= -1)
     {
         printf("Process %d finished\n", pid);
-        continue;
     }
 
     return (errno == ECHILD) ? 0 : -1;
@@ -67,6 +66,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
 
     
     int pipes[MAX_NUM_COMMANDS][2];
+    int pids[MAX_NUM_COMMANDS];
     int pipeNum;
     for(pipeNum=0; pipeNum < numCommands; ++pipeNum)
     {
@@ -93,29 +93,37 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
         perror(commands[0][0]);
         exit(-1);
     }
-
+    else
+    {
+        pids[0] = pid;
+    }
     
     if (numCommands > 1) {
 
         int i=1;
         for(; i < numCommands-1; ++i)
         {
-            pid_t pid = fork();
-            if (pid == 0) //child
+            pid_t pid_inner = fork();
+            if (pid_inner == 0) //child
             {
                 
                 dup2(pipes[i-1][0], 0); //Make previous pipe read into STDIN
                 dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
 
-                close(pipes[i][0]);   //close read on this pipe
-                close(pipes[i][1]);
-                
-                close(pipes[i-1][1]); //close write on previous pipe
-                close(pipes[i-1][0]);
+                int j = 0;
+                for (; j < numCommands; ++j)
+                {
+                    close(pipes[j][0]);
+                    close(pipes[j][1]);
+                }
                 
                 execvp(commands[i][0], commands[i]);
                 perror(commands[i][0]);
                 exit(-1); //execvp should not return
+            }
+            else
+            {
+                pids[i] = pid_inner;
             }
         }
 
@@ -126,14 +134,20 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
             dup2(pipes[i-1][0], 0);
             dup2(pipes[i][1], savedOUT); //send output to stdout
 
-            close(pipes[i][0]);
-            close(pipes[i-1][1]);
-	    close(pipes[i-1][0]);
-	    close(pipes[i][1]);
+            int j = 0;
+            for (; j < numCommands; ++j)
+            {
+                close(pipes[j][0]);
+                close(pipes[j][1]);
+            }
             
             execvp(commands[i][0], commands[i]);
             perror(commands[i][0]);
             exit(-1);
+        }
+        else
+        {
+            pids[i] = pid_last;
         }
     }
 
@@ -152,7 +166,9 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (numCommands > 1 && pid_last > 0)
     {
-        waitpid(pid_last);
+        int i = 0;
+        for (; i < numCommands; ++i)
+            waitpid(pids[i]);
     }
 }
 
