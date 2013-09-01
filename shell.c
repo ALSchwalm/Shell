@@ -27,17 +27,6 @@ int internal_wait()
     return (errno == ECHILD) ? 0 : -1;
 }
 
-int num_args(char** args, unsigned int num)
-{
-    if (args[num+1] != NULL) 
-    {
-        printf("Invalid number of arguments for command\n");
-        return false;
-    }
-    return true;
-}
-
-
 void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
              int numCommands,
              int background)
@@ -45,29 +34,21 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     //Handle built-in commands (i.e. cd)
     if (strcmp(commands[0][0], "exit") == 0)
     {
-        if (!num_args(commands[0], 0)) //Exit must have no other args
-            return;
         internal_wait();
         exit(0);
     }
     else if (strcmp(commands[0][0], "wait") == 0)
     {
-        if (!num_args(commands[0], 0))
-            return;
         internal_wait();
         return;
     }
     else if (strcmp(commands[0][0], "cd") == 0)
     {
-        if (!num_args(commands[0], 1))
-            return;
         chdir(commands[0][1]);
         return;
     }
     else if (strcmp(commands[0][0], "pwd") == 0)
     {
-        if (!num_args(commands[0], 0))
-            return;
         printf("%s\n", working_dir);
         return;
     }
@@ -82,7 +63,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
 
     int savedOUT = dup(STDOUT_FILENO);
-    int savedIN  = dup(STDIN_FILENO);
 
     pid_t pid;
     
@@ -92,7 +72,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
         pid  = fork();
         if (pid == 0) //child
         {
-
             if (i > 0)
                 dup2(pipes[i-1][0], 0); //Make previous pipe read into STDIN
                 
