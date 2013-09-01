@@ -76,7 +76,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     int savedOUT = dup(STDOUT_FILENO);
     int savedIN  = dup(STDIN_FILENO);
 
-    pid_t pid_last = 0;
     pid_t pid = fork();
     if (pid == 0) // Special case for 1st command
     {
@@ -101,14 +100,17 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     if (numCommands > 1) {
 
         int i=1;
-        for(; i < numCommands-1; ++i)
+        for(; i < numCommands; ++i)
         {
             pid_t pid_inner = fork();
             if (pid_inner == 0) //child
             {
                 
                 dup2(pipes[i-1][0], 0); //Make previous pipe read into STDIN
-                dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
+                if ( i < numCommands-1 )
+                    dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
+                else
+                    dup2(pipes[i][1], savedOUT);
 
                 int j = 0;
                 for (; j < numCommands; ++j)
@@ -126,29 +128,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
                 pids[i] = pid_inner;
             }
         }
-
-        pid_last = fork();  //Special case for last command
-        if (pid_last == 0)
-        {
-
-            dup2(pipes[i-1][0], 0);
-            dup2(pipes[i][1], savedOUT); //send output to stdout
-
-            int j = 0;
-            for (; j < numCommands; ++j)
-            {
-                close(pipes[j][0]);
-                close(pipes[j][1]);
-            }
-            
-            execvp(commands[i][0], commands[i]);
-            perror(commands[i][0]);
-            exit(-1);
-        }
-        else
-        {
-            pids[i] = pid_last;
-        }
     }
 
     pipeNum = 0;
@@ -164,7 +143,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     {
         waitpid(pid);
     }
-    else if (numCommands > 1 && pid_last > 0)
+    else if (numCommands > 1)
     {
         int i = 0;
         for (; i < numCommands; ++i)
