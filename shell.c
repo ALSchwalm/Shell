@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/wait.h>
 
 #define true 1
 #define false 0
@@ -12,11 +13,12 @@
 #define MAX_NUM_ARGS 30
 #define MAX_NUM_COMMANDS 10
 #define MAX_BACKGROUND_PROCESSES 20
+#define MAX_HOSTNAME_LEN 20
 
 char working_dir[MAX_INPUT_SIZE];
-char* home = NULL;
-int background_table[MAX_BACKGROUND_PROCESSES];
 char temp_dir[MAX_DIRECTORY_SIZE];
+int background_table[MAX_BACKGROUND_PROCESSES];
+char* home = NULL;
 
 int add_background_pid(int pid)
 {
@@ -50,8 +52,8 @@ void nonblocking_wait(void)
 void blocking_wait(void)
 {
     int pid = 0;
-    
-    while((pid = wait())!= -1)
+    int status;
+    while((pid = wait(&status))!= -1)
     {
         printf("process %d ended\n", pid);
     }
@@ -154,9 +156,9 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (!background)
     {
-        int i = 0;
+        int i = 0, status;
         for (; i < numCommands; ++i)
-            waitpid(pids[i]);
+            waitpid(pids[i], &status, 0);
     }
 }
 
@@ -165,11 +167,15 @@ int main()
     atexit(blocking_wait);
     
     char input[MAX_DIRECTORY_SIZE];
-
+    char host[MAX_HOSTNAME_LEN];
     char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS];
     char* arg;
     int background = false;
-    home =  getenv("HOME");
+    
+    char* home = getenv("HOME");
+    char* user = getenv("USER");
+    gethostname(host, MAX_HOSTNAME_LEN);
+    
     while (true)
     {
         nonblocking_wait();
@@ -182,7 +188,7 @@ int main()
         }
 
         if (isatty(fileno(stdin)))  //Hide prompt on redirect
-            printf("%s$", working_dir);
+            printf("%s@%s:%s>", user, host, working_dir);
         
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL)
             break;
@@ -199,14 +205,14 @@ int main()
             continue;
         }
         
-        if (loc == 0)               //do nothing if empty line
+        if (loc == 0) {                  //do nothing if empty line
             continue;
-        if (input[loc-1] == '&') {  //detect background processes
+        }
+        else if (input[loc-1] == '&') {  //detect background processes
             background = true;
             input[loc-1] = '\0';
         }
-        else
-        {
+        else{
             background = false;
         }
 
