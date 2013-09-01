@@ -14,7 +14,9 @@
 #define MAX_BACKGROUND_PROCESSES 20
 
 char working_dir[MAX_INPUT_SIZE];
+char* home = NULL;
 int background_table[MAX_BACKGROUND_PROCESSES];
+char temp_dir[MAX_DIRECTORY_SIZE];
 
 int add_background_pid(int pid)
 {
@@ -58,7 +60,8 @@ void blocking_wait(void)
 void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
              int numCommands,
              int background)
-{    
+{
+    
     //Handle built-in commands
     if (strcmp(commands[0][0], "exit") == 0)
     {
@@ -71,16 +74,22 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (strcmp(commands[0][0], "cd") == 0)
     {
+        if (commands[0][1][0] == '~') {
+            strcpy(temp_dir, home);
+            strcat(temp_dir, "/");
+            strcat(temp_dir, commands[0][1]+1);
+            chdir(temp_dir);
+            return;
+        }
         chdir(commands[0][1]);
         return;
     }
     else if (strcmp(commands[0][0], "pwd") == 0)
     {
-        printf("%s\n", working_dir);
+        printf("%s\n", getcwd(working_dir, MAX_DIRECTORY_SIZE-1));
         return;
     }
      
-    
     int pipes[MAX_NUM_COMMANDS][2];
     int pids[MAX_NUM_COMMANDS];
     int pipeNum;
@@ -160,15 +169,20 @@ int main()
     char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS];
     char* arg;
     int background = false;
-          
+    home =  getenv("HOME");
     while (true)
     {
         nonblocking_wait();
         
         getcwd(working_dir, MAX_DIRECTORY_SIZE-1);
 
+        if (strstr(working_dir, home)) {
+            strcpy(temp_dir, working_dir+strlen(home));
+            sprintf(working_dir, "~%s", temp_dir);
+        }
+
         if (isatty(fileno(stdin)))  //Hide prompt on redirect
-            printf("%s>", working_dir);
+            printf("%s$", working_dir);
         
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL)
             break;
