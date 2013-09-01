@@ -31,7 +31,7 @@ int add_background_pid(int pid)
     return false;
 }
 
-void nonblock_background_wait(void)
+void nonblocking_wait(void)
 {
     int status;
     int i = 0;
@@ -45,7 +45,7 @@ void nonblock_background_wait(void)
     }
 }
 
-int internal_wait(void)
+void blocking_wait(void)
 {
     int pid = 0;
     
@@ -53,8 +53,6 @@ int internal_wait(void)
     {
         printf("process %d ended\n", pid);
     }
-
-    return (errno == ECHILD) ? 0 : -1;
 }
 
 void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
@@ -64,12 +62,11 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     //Handle built-in commands
     if (strcmp(commands[0][0], "exit") == 0)
     {
-        internal_wait();
         exit(EXIT_SUCCESS);
     }
     else if (strcmp(commands[0][0], "wait") == 0)
     {
-        internal_wait();
+        blocking_wait();
         return;
     }
     else if (strcmp(commands[0][0], "cd") == 0)
@@ -156,6 +153,8 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
 
 int main()
 {
+    atexit(blocking_wait);
+    
     char input[MAX_DIRECTORY_SIZE];
 
     char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS];
@@ -164,7 +163,7 @@ int main()
           
     while (true)
     {
-        nonblock_background_wait();
+        nonblocking_wait();
         
         getcwd(working_dir, MAX_DIRECTORY_SIZE-1);
 
@@ -180,7 +179,9 @@ int main()
         }
         else
         {
-            printf("Input too long\n");
+            printf("Input exceeded maximum allowed length of %d characters\n", MAX_INPUT_SIZE);
+            char c;
+            while((c = getchar()) != '\n' && c != EOF){} //discard extra chars
             continue;
         }
         
@@ -195,7 +196,8 @@ int main()
             background = false;
         }
 
-        commands[0][0] = strtok(input, " "); //Determine the command
+        //Determine the command
+        commands[0][0] = strtok(input, " ");
             
         //Parse arguments
         size_t index = 1;
@@ -217,8 +219,7 @@ int main()
         }
         commands[command_num][index] = NULL;
 
-        execute(commands, command_num+1, background);
-        
+        execute(commands, command_num+1, background);        
     }
     return 0;
 }
