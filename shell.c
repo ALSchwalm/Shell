@@ -12,46 +12,24 @@
 #define MAX_DIRECTORY_SIZE 100
 #define MAX_NUM_ARGS 30
 #define MAX_NUM_COMMANDS 10
-#define MAX_BACKGROUND_PROCESSES 20
 #define MAX_HOSTNAME_LEN 20
 
 char working_dir[MAX_INPUT_SIZE];
 char temp_dir[MAX_DIRECTORY_SIZE];
-int background_table[MAX_BACKGROUND_PROCESSES];
 char* home = NULL;
-
-int add_background_pid(int pid)
-{
-    printf("process %d started\n", pid);
-    
-    int i = 0;
-    for (; i < MAX_BACKGROUND_PROCESSES; ++i)
-    {
-        if (background_table[i] == 0) {
-            background_table[i] = pid;
-            return true;
-        }
-    }
-    return false;
-}
 
 void nonblocking_wait(void)
 {
-    int status;
-    int i = 0;
-    for (; i < MAX_BACKGROUND_PROCESSES; ++i)
+    int pid, status;
+    while((pid = waitpid(-1, &status, WNOHANG)) > 0)
     {
-        if (background_table[i] &&
-              waitpid(background_table[i], &status, WNOHANG) > 0) {
-            printf("process %d ended\n", background_table[i]);
-            background_table[i] = 0;
-        }
+        printf("process %d ended\n", pid);
     }
 }
 
 void blocking_wait(void)
 {
-    int pid = 0, status;
+    int pid, status;
     while((pid = wait(&status))!= -1)
     {
         printf("process %d ended\n", pid);
@@ -151,9 +129,9 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
 
     if (pid > 0 && background)
     {
-        add_background_pid(pid);
+        printf("process %d started\n", pid);
     }
-    else if (!background)
+    else if (pid > 0 && !background)
     {
         int i = 0, status;
         for (; i < numCommands; ++i)
@@ -190,7 +168,7 @@ int main()
             printf("%s@%s:[%s]>", user, host, working_dir);
         
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL)
-            break;
+            continue;
 
         size_t loc = strlen(input) - 1;
         if (input[loc] == '\n'){    //strip newline left by fgets
