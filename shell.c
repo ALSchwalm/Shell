@@ -195,6 +195,7 @@ int main()
         //Parse arguments
         size_t index = 1;
         size_t command_num = 0;
+        int valid = true;
         while (input != NULL)
         {
             arg = strtok(NULL, " ");
@@ -202,17 +203,28 @@ int main()
                 break;
             }
             else if (strcmp(arg, "|") == 0) {
+                if (command_num >= MAX_NUM_COMMANDS) {
+                    printf("Input exceeded maximum number of piped commands (%d)\n", MAX_NUM_COMMANDS);
+                    valid = false;
+                    break;
+                }
                 commands[command_num][index] = NULL;
                 ++command_num;
                 index=0;
             }
             else {
+                if (index >= MAX_NUM_ARGS) {
+                    printf("Input exceeded maximum number of arguments (%d)\n", MAX_NUM_ARGS);
+                    valid = false;
+                    break;
+                }
                 commands[command_num][index++] = arg;
             }
         }
         commands[command_num][index] = NULL;
 
-        execute(commands, command_num+1, background);        
+        if (valid)
+            execute(commands, command_num+1, background);        
     }
     return 0;
 }
