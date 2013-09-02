@@ -4,9 +4,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/wait.h>
-
-#define true 1
-#define false 0
+#include <stdbool.h>
 
 #define MAX_INPUT_SIZE 100
 #define MAX_DIRECTORY_SIZE 100
@@ -16,10 +14,11 @@
 char working_dir[MAX_INPUT_SIZE];
 char temp_dir[MAX_DIRECTORY_SIZE];
 char* home = NULL;
+int status = 0; //Hold status info for chdir/wait etc.
 
 void nonblocking_wait(void)
 {
-    int pid, status;
+    int pid;
     while((pid = waitpid(-1, &status, WNOHANG)) > 0)
     {
         printf("process %d ended\n", pid);
@@ -28,7 +27,7 @@ void nonblocking_wait(void)
 
 void blocking_wait(void)
 {
-    int pid, status;
+    int pid;
     while((pid = wait(&status))!= -1)
     {
         printf("process %d ended\n", pid);
@@ -52,7 +51,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (strcmp(commands[0][0], "cd") == 0)
     {
-        int status;
         if (commands[0][1][0] == '~') {
             strcpy(temp_dir, home);
             strcat(temp_dir, commands[0][1]+1);
@@ -133,7 +131,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (pid > 0 && !background)
     {
-        int i = 0, status;
+        int i = 0;
         for (; i < numCommands; ++i)
             waitpid(pids[i], &status, 0);
     }
