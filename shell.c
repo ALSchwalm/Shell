@@ -52,14 +52,15 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (strcmp(commands[0][0], "cd") == 0)
     {
+        int status;
         if (commands[0][1][0] == '~') {
             strcpy(temp_dir, home);
-            strcat(temp_dir, "/");
             strcat(temp_dir, commands[0][1]+1);
-            chdir(temp_dir);
-            return;
+            strcpy(commands[0][1], temp_dir);
         }
-        chdir(commands[0][1]);
+        status = chdir(commands[0][1]);
+        if (status != 0)
+            perror(commands[0][1]);
         return;
     }
     else if (strcmp(commands[0][0], "pwd") == 0)
@@ -208,8 +209,7 @@ int main()
                     valid = false;
                     break;
                 }
-                commands[command_num][index] = NULL;
-                ++command_num;
+                commands[command_num++][index] = NULL;
                 index=0;
             }
             else {
