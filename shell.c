@@ -12,7 +12,6 @@
 #define MAX_DIRECTORY_SIZE 100
 #define MAX_NUM_ARGS 30
 #define MAX_NUM_COMMANDS 10
-#define MAX_HOSTNAME_LEN 20
 
 char working_dir[MAX_INPUT_SIZE];
 char temp_dir[MAX_DIRECTORY_SIZE];
@@ -144,14 +143,11 @@ int main()
     atexit(blocking_wait);
     
     char input[MAX_DIRECTORY_SIZE];
-    char host[MAX_HOSTNAME_LEN];
     char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS];
     char* arg;
     int background = false;
     
-    home = getenv("HOME");
-    char* user = getenv("USER");
-    gethostname(host, MAX_HOSTNAME_LEN);
+    if ( (home = getenv("HOME")) == NULL) home = "//";
     
     while (true)
     {
@@ -165,7 +161,7 @@ int main()
         }
 
         if (isatty(fileno(stdin)))  //Hide prompt on redirect
-            printf("%s@%s:[%s]>", user, host, working_dir);
+            printf("[%s]>", working_dir);
         
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL)
             continue;
