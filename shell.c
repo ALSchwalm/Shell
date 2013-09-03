@@ -11,7 +11,7 @@
 #define MAX_NUM_ARGS 30
 #define MAX_NUM_COMMANDS 10
 
-char working_dir[MAX_INPUT_SIZE];
+char working_dir[MAX_DIRECTORY_SIZE];
 char temp_dir[MAX_DIRECTORY_SIZE];
 char* home = NULL;
 int status = 0; //Hold status info for chdir/wait etc.
@@ -63,7 +63,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (strcmp(commands[0][0], "pwd") == 0)
     {
-        printf("%s\n", getcwd(working_dir, MAX_DIRECTORY_SIZE-1));
+        printf("%s\n", getcwd(working_dir, MAX_DIRECTORY_SIZE));
         return;
     }
      
@@ -104,7 +104,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
             perror(commands[i][0]);
             exit(EXIT_FAILURE); //execvp should not return
         }
-        else if (pid > 0)
+        else if (pid > 0)  //parent
         {
             pids[i] = pid; //store pids for wait
         }
@@ -114,7 +114,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
             return;
         }
     }
-    
 
     pipeNum = 0;
     for (; pipeNum < numCommands; ++pipeNum)
@@ -141,7 +140,7 @@ int main()
 {
     atexit(blocking_wait);
     
-    char input[MAX_DIRECTORY_SIZE];
+    char input[MAX_INPUT_SIZE];
     char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS];
     char* arg;
     int background = false;
@@ -152,7 +151,7 @@ int main()
     {
         nonblocking_wait();
         
-        getcwd(working_dir, MAX_DIRECTORY_SIZE-1);
+        getcwd(working_dir, MAX_DIRECTORY_SIZE);
 
         if (strstr(working_dir, home)) {
             strcpy(temp_dir, working_dir+strlen(home));
