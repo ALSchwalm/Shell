@@ -51,10 +51,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (strcmp(commands[0][0], "cd") == 0)
     {
-        if (strlen(home) + strlen(commands[0][1]+1) > MAX_DIRECTORY_SIZE) {
-            printf("Directory path too long\n");
-            return;
-        }
         if (commands[0][1][0] == '~') {
             strcpy(temp_dir, home);
             strcat(temp_dir, commands[0][1]+1);
@@ -67,10 +63,13 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
     }
     else if (strcmp(commands[0][0], "pwd") == 0)
     {
-        printf("%s\n", getcwd(working_dir, MAX_DIRECTORY_SIZE));
+        if (getcwd(working_dir, MAX_DIRECTORY_SIZE))
+            printf("%s\n", working_dir);
+        else
+            printf("Directory path too long\n");
         return;
     }
-     
+
     int pipes[MAX_NUM_COMMANDS][2];
     int pids[MAX_NUM_COMMANDS];
     int pipeNum;
@@ -155,16 +154,20 @@ int main()
     {
         nonblocking_wait();
         
-        if (!getcwd(working_dir, MAX_DIRECTORY_SIZE)) printf("Directory path too long\n");
-
-        if (strstr(working_dir, home) && strlen(working_dir - strlen(home))) {
-            strcpy(temp_dir, working_dir+strlen(home));
-            sprintf(working_dir, "~%s", temp_dir);
+        if (!getcwd(working_dir, MAX_DIRECTORY_SIZE))
+        {
+            printf("Shell>");
         }
+        else
+        {
+            if (strstr(working_dir, home)) {
+                strcpy(temp_dir, working_dir+strlen(home));
+                sprintf(working_dir, "~%s", temp_dir);
+            }
 
-        if (isatty(fileno(stdin)))  //Hide prompt on redirect
-            printf("[%s]>", working_dir);
-        
+            if (isatty(fileno(stdin)))  //Hide prompt on redirect
+                printf("[%s]>", working_dir);
+        }
         if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL)
             continue;
 
@@ -200,8 +203,7 @@ int main()
         int valid = true;
         while (input != NULL)
         {
-            arg = strtok(NULL, " ");
-            if (arg == NULL) {
+            if ((arg = strtok(NULL, " ")) == NULL) {
                 break;
             }
             else if (strcmp(arg, "|") == 0) {
