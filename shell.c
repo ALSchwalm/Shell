@@ -13,7 +13,7 @@
 
 char working_dir[MAX_DIRECTORY_SIZE];
 char temp_dir[MAX_DIRECTORY_SIZE];
-char* home = NULL;
+const char* home = NULL;
 int status = 0; //Hold status info for chdir/wait etc.
 
 void nonblocking_wait(void)
@@ -25,7 +25,7 @@ void nonblocking_wait(void)
     }
 }
 
-void blocking_wait(void)
+void blocking_wait(void) //Signature must be exactly this for atexit()
 {
     int pid;
     while((pid = wait(&status))!= -1)
@@ -38,7 +38,6 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
              int numCommands,
              int background)
 {
-    
     //Handle built-in commands
     if (strcmp(commands[0][0], "exit") == 0)
     {
@@ -102,7 +101,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
                 close(pipes[j][0]);
                 close(pipes[j][1]);
             }
-                
+
             execvp(commands[i][0], commands[i]);
             perror(commands[i][0]);
             exit(EXIT_FAILURE); //execvp should not return
@@ -127,11 +126,11 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
             close(pipes[pipeNum][1]);
     }
 
-    if (pid > 0 && background)
+    if (background)
     {
         printf("process %d started\n", pid);
     }
-    else if (pid > 0 && !background)
+    else //wait for every process spawned by the pipes
     {
         int i = 0;
         for (; i < numCommands; ++i)
