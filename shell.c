@@ -88,10 +88,10 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
         if (pid == 0) //child
         {
             if (i > 0)
-                dup2(pipes[i-1][0], 0); //Make previous pipe read into STDIN
+                dup2(pipes[i-1][0], STDIN_FILENO); //Make previous pipe read into STDIN
                 
             if ( i < numCommands-1 )
-                dup2(pipes[i][1], 1);   //Make current pipe write into STDOUT
+                dup2(pipes[i][1], STDOUT_FILENO);   //Make current pipe write into STDOUT
             else
                 dup2(pipes[i][1], savedOUT);
             
@@ -117,8 +117,7 @@ void execute(char* commands[MAX_NUM_COMMANDS][MAX_NUM_ARGS],
         }
     }
 
-    pipeNum = 0;
-    for (; pipeNum < numCommands; ++pipeNum)
+    for (pipeNum = 0; pipeNum < numCommands; ++pipeNum)
     {
         if (pipes[pipeNum][0] != STDOUT_FILENO)
             close(pipes[pipeNum][0]);
